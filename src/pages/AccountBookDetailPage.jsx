@@ -9,6 +9,12 @@ import {
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1)
+const EXPENSE_GROUP_LABELS = {
+  fixed: '고정',
+  variable: '변동',
+  irregular: '비정기',
+}
+const EXPENSE_GROUP_OPTIONS = Object.entries(EXPENSE_GROUP_LABELS)
 
 const formatMonth = (month) => {
   const [year, monthNumber] = month.split('-')
@@ -74,6 +80,7 @@ function CategoryColumn({
   type,
   onAdd,
   onCancelEdit,
+  onChangeExpenseGroup,
   onChangeName,
   onDelete,
   onEdit,
@@ -98,17 +105,42 @@ function CategoryColumn({
 
           return (
             <div className="category-type-row" key={item.id}>
-              {isEditing ? (
-                <input
-                  aria-label={`${title} 항목명`}
-                  value={item.name}
-                  onChange={(event) =>
-                    onChangeName(type, item.id, event.target.value)
-                  }
-                />
-              ) : (
-                <span>{item.name}</span>
-              )}
+              <div className="category-item-main">
+                {isEditing ? (
+                  <div className="category-edit-fields">
+                    <input
+                      aria-label={`${title} 항목명`}
+                      value={item.name}
+                      onChange={(event) =>
+                        onChangeName(type, item.id, event.target.value)
+                      }
+                    />
+                    {type === 'expense' && (
+                      <select
+                        aria-label={`${title} 지출 그룹`}
+                        value={item.expense_group || 'variable'}
+                        onChange={(event) =>
+                          onChangeExpenseGroup(type, item.id, event.target.value)
+                        }
+                      >
+                        {EXPENSE_GROUP_OPTIONS.map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                ) : (
+                  <span>
+                    {type === 'expense'
+                      ? `${item.name} · ${
+                          EXPENSE_GROUP_LABELS[item.expense_group] || '변동'
+                        }`
+                      : item.name}
+                  </span>
+                )}
+              </div>
 
               <div className="category-row-actions">
                 {isEditing ? (
@@ -208,7 +240,11 @@ function CategoryManageModal({
       ...current,
       [editingBackup.type]: current[editingBackup.type].map((item) =>
         item.id === editingBackup.id
-          ? { ...item, name: editingBackup.name }
+          ? {
+              ...item,
+              name: editingBackup.name,
+              expense_group: editingBackup.expense_group,
+            }
           : item,
       ),
     }
@@ -230,6 +266,8 @@ function CategoryManageModal({
           {
             id,
             name: '새 항목',
+            type,
+            expense_group: type === 'expense' ? 'variable' : null,
           },
           ...restored[type],
         ],
@@ -245,6 +283,19 @@ function CategoryManageModal({
       ...current,
       [type]: current[type].map((item) =>
         item.id === id ? { ...item, name } : item,
+      ),
+    }))
+  }
+
+  const handleChangeExpenseGroup = (type, id, expenseGroup) => {
+    if (type !== 'expense') {
+      return
+    }
+
+    setDraftCategoryTypes((current) => ({
+      ...current,
+      expense: current.expense.map((item) =>
+        item.id === id ? { ...item, expense_group: expenseGroup } : item,
       ),
     }))
   }
@@ -301,6 +352,7 @@ function CategoryManageModal({
     setEditingBackup({
       id: item.id,
       name: item.name,
+      expense_group: item.expense_group,
       type,
     })
   }
@@ -334,6 +386,7 @@ function CategoryManageModal({
         ...item,
         name: nextName,
         type,
+        expense_group: type === 'expense' ? item.expense_group || 'variable' : null,
         display_order: index,
       }
       const savedCategory =
@@ -411,6 +464,7 @@ function CategoryManageModal({
             type="expense"
             onAdd={handleAdd}
             onCancelEdit={handleCancelEdit}
+            onChangeExpenseGroup={handleChangeExpenseGroup}
             onChangeName={handleChangeName}
             onDelete={handleDelete}
             onEdit={handleEdit}
@@ -426,6 +480,7 @@ function CategoryManageModal({
             type="income"
             onAdd={handleAdd}
             onCancelEdit={handleCancelEdit}
+            onChangeExpenseGroup={handleChangeExpenseGroup}
             onChangeName={handleChangeName}
             onDelete={handleDelete}
             onEdit={handleEdit}

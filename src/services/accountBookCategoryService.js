@@ -1,7 +1,7 @@
 import { supabase } from "../lib/supabaseClient";
 
 const ACCOUNT_BOOK_CATEGORY_COLUMNS =
-  "account_book_category_id, account_book_id, type, name, display_order, created_at, updated_at";
+  "account_book_category_id, account_book_id, type, name, display_order, expense_group, created_at, updated_at";
 
 const isUuid = (value) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -15,9 +15,13 @@ const toCategory = (row) => ({
   type: row.type,
   name: row.name,
   display_order: row.display_order,
+  expense_group: row.expense_group,
   created_at: row.created_at,
   updated_at: row.updated_at,
 });
+
+const getExpenseGroupValue = (category) =>
+  category.type === "expense" ? category.expense_group || "variable" : null;
 
 const toCategoryTypes = (rows) => {
   return rows.reduce(
@@ -36,6 +40,8 @@ const flattenCategoryTypes = (categoryTypes) => {
       ...category,
       type,
       display_order: index,
+      expense_group:
+        type === "expense" ? category.expense_group || "variable" : null,
     })),
   );
 };
@@ -64,6 +70,7 @@ export const createAccountBookCategory = async (accountBookId, category) => {
       type: category.type,
       name: category.name,
       display_order: category.display_order ?? 0,
+      expense_group: getExpenseGroupValue(category),
     })
     .select(ACCOUNT_BOOK_CATEGORY_COLUMNS)
     .single();
@@ -86,6 +93,7 @@ export const updateAccountBookCategory = async (
       type: nextCategory.type,
       name: nextCategory.name,
       display_order: nextCategory.display_order ?? 0,
+      expense_group: getExpenseGroupValue(nextCategory),
       updated_at: new Date().toISOString(),
     })
     .eq("account_book_id", accountBookId)
@@ -156,7 +164,8 @@ export const syncAccountBookCategories = async (
       !previous ||
       previous.name !== category.name ||
       previous.type !== category.type ||
-      previous.display_order !== category.display_order;
+      previous.display_order !== category.display_order ||
+      previous.expense_group !== category.expense_group;
 
     if (hasChanges) {
       await updateAccountBookCategory(accountBookId, categoryId, category);

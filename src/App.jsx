@@ -48,6 +48,41 @@ import "./App.css";
 const hasAccountBooks = (accountBooks) => accountBooks.length > 0;
 
 const EMPTY_CATEGORY_TYPES = { expense: [], income: [] };
+const TRANSACTION_SAVE_DELAY = 800;
+
+const getTransactionSaveKey = (accountBookId, month) =>
+  `${accountBookId}:${month}`;
+
+const getTransactionDraftKey = (accountBookId, month) =>
+  `transaction-draft:${accountBookId}:${month}`;
+
+const readTransactionDraft = (accountBookId, month) => {
+  const rawDraft = sessionStorage.getItem(
+    getTransactionDraftKey(accountBookId, month),
+  );
+
+  if (!rawDraft) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawDraft);
+  } catch {
+    sessionStorage.removeItem(getTransactionDraftKey(accountBookId, month));
+    return null;
+  }
+};
+
+const writeTransactionDraft = (accountBookId, month, transactions) => {
+  sessionStorage.setItem(
+    getTransactionDraftKey(accountBookId, month),
+    JSON.stringify(transactions),
+  );
+};
+
+const clearTransactionDraft = (accountBookId, month) => {
+  sessionStorage.removeItem(getTransactionDraftKey(accountBookId, month));
+};
 
 const getNextMonth = (month) => {
   const [year, monthNumber] = month.split("-").map(Number);
@@ -313,6 +348,9 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const transactionSaveTimersRef = useRef({});
+  const transactionSaveVersionsRef = useRef({});
+  const savedTransactionsRef = useRef({});
+  const pendingTransactionChangesRef = useRef({});
 
   const isLoggedIn = Boolean(currentUser);
   const startPath = "/account-books";
@@ -325,6 +363,16 @@ function App() {
   const monthAccountBookId = monthMatch?.[1];
   const selectedMonth = monthMatch?.[2];
   const activeAccountBookId = detailAccountBookId || monthAccountBookId;
+
+  useEffect(() => {
+    const transactionSaveTimers = transactionSaveTimersRef.current;
+
+    return () => {
+      Object.values(transactionSaveTimers).forEach((timerId) => {
+        window.clearTimeout(timerId);
+      });
+    };
+  }, []);
 
   useEffect(() => {
     const loadSession = async () => {
@@ -437,12 +485,24 @@ function App() {
     const loadTransactions = async () => {
       try {
         const data = await fetchTransactions(monthAccountBookId, selectedMonth);
+        const saveKey = getTransactionSaveKey(monthAccountBookId, selectedMonth);
+        const draftTransactions = readTransactionDraft(
+          monthAccountBookId,
+          selectedMonth,
+        );
+        const visibleTransactions = draftTransactions || data;
+
+        savedTransactionsRef.current[saveKey] = data;
+        pendingTransactionChangesRef.current[saveKey] =
+          Boolean(draftTransactions);
+        transactionSaveVersionsRef.current[saveKey] =
+          transactionSaveVersionsRef.current[saveKey] || 0;
 
         setTransactions((prevTransactions) => ({
           ...prevTransactions,
           [monthAccountBookId]: {
             ...(prevTransactions[monthAccountBookId] || {}),
-            [selectedMonth]: data,
+            [selectedMonth]: visibleTransactions,
           },
         }));
       } catch (error) {
@@ -685,15 +745,33 @@ function App() {
     }
   };
 
+  const handleStartEditingTransactions = (accountBookId, month) => {
+    const saveKey = getTransactionSaveKey(accountBookId, month);
+
+    window.clearTimeout(transactionSaveTimersRef.current[saveKey]);
+  };
+
   const handleChangeTransactions = async (
     accountBookId,
     month,
     nextTransactions,
+    options = {},
   ) => {
-    const previousMonthTransactions = transactions[accountBookId]?.[month] || {
-      expense: [],
-      income: [],
-    };
+    const saveKey = getTransactionSaveKey(accountBookId, month);
+    const previousMonthTransactions =
+      savedTransactionsRef.current[saveKey] ||
+      transactions[accountBookId]?.[month] || {
+        expense: [],
+        income: [],
+      };
+    const shouldMarkDirty = options.markDirty !== false;
+
+    if (shouldMarkDirty) {
+      pendingTransactionChangesRef.current[saveKey] = true;
+      transactionSaveVersionsRef.current[saveKey] =
+        (transactionSaveVersionsRef.current[saveKey] || 0) + 1;
+      writeTransactionDraft(accountBookId, month, nextTransactions);
+    }
 
     setTransactions((prevTransactions) => ({
       ...prevTransactions,
@@ -735,9 +813,14 @@ function App() {
       }),
     );
 
-    const saveKey = `${accountBookId}:${month}`;
-
     window.clearTimeout(transactionSaveTimersRef.current[saveKey]);
+
+    if (options.deferSave || !pendingTransactionChangesRef.current[saveKey]) {
+      return;
+    }
+
+    const saveVersion = transactionSaveVersionsRef.current[saveKey] || 0;
+
     transactionSaveTimersRef.current[saveKey] = window.setTimeout(async () => {
       try {
         const savedTransactions = await syncTransactions(
@@ -746,6 +829,8 @@ function App() {
           previousMonthTransactions,
           nextTransactions,
         );
+        const hasNewerChanges =
+          (transactionSaveVersionsRef.current[saveKey] || 0) !== saveVersion;
         const savedIncome = savedTransactions.income.reduce(
           (sum, item) => sum + Number(item.amount || 0),
           0,
@@ -754,6 +839,15 @@ function App() {
           (sum, item) => sum + Number(item.amount || 0),
           0,
         );
+
+        savedTransactionsRef.current[saveKey] = savedTransactions;
+
+        if (hasNewerChanges) {
+          return;
+        }
+
+        pendingTransactionChangesRef.current[saveKey] = false;
+        clearTransactionDraft(accountBookId, month);
 
         setTransactions((prevTransactions) => ({
           ...prevTransactions,
@@ -787,9 +881,10 @@ function App() {
         );
       } catch (error) {
         console.error("Save transactions error:", error);
+        pendingTransactionChangesRef.current[saveKey] = true;
         alert("거래내역 저장 중 오류가 발생했습니다.");
       }
-    }, 500);
+    }, TRANSACTION_SAVE_DELAY);
   };
 
   const handleSaveCategoryTypes = async (nextCategoryTypes) => {
@@ -953,6 +1048,7 @@ function App() {
         categoryTypes={categoryTypes}
         transactions={transactions}
         onChangeTransactions={handleChangeTransactions}
+        onStartEditingTransactions={handleStartEditingTransactions}
       />,
     );
   };
