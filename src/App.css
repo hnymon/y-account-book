@@ -94,8 +94,13 @@
   font-weight: 800;
 }
 
-.logout-button {
+.app-header-actions {
   justify-self: end;
+  display: flex;
+  gap: 8px;
+}
+
+.logout-button {
   min-width: 88px;
   height: 38px;
   border: 1px solid #ead7df;
@@ -795,6 +800,59 @@
   grid-template-columns: 1fr 1fr;
   min-height: 360px;
   overflow: auto;
+}
+
+.profile-modal {
+  width: min(100%, 420px);
+}
+
+.profile-modal-form {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.profile-modal-form .category-modal-body {
+  grid-template-columns: 1fr;
+  min-height: 0;
+}
+
+.profile-modal-form label {
+  display: grid;
+  gap: 8px;
+  color: #6a4b5a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.profile-modal-form input {
+  width: 100%;
+  height: 40px;
+  border: 1px solid #ead7df;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #5d4050;
+  background: #ffffff;
+  font: inherit;
+  font-weight: 800;
+  outline: none;
+}
+
+.profile-modal-form .category-column {
+  padding: 8px 18px;
+  border-bottom: 0;
+}
+
+.profile-modal-form .category-modal-body .category-column:first-child {
+  border-right: 0;
+}
+
+.profile-modal-form .category-column:last-child {
+  border-bottom: 0;
+}
+
+.profile-modal-form .form-error {
+  margin-top: 10px;
 }
 
 .category-column {

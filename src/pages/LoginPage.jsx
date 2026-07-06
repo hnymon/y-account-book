@@ -32,10 +32,11 @@ function LoginPage({ onLogin }) {
       return
     }
 
-    const nextPath = onLogin({
+    const nextPath = await onLogin({
       id: data.user.id,
       userId: trimmedUserId,
       nickname: trimmedUserId,
+      email: data.user.email,
     })
 
     navigate(nextPath, { replace: true })

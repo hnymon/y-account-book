@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import AppHeader from "./components/AppHeader.jsx";
+import ProfileModal from "./components/ProfileModal.jsx";
 import AccountBookCreatePage from "./pages/AccountBookCreatePage.jsx";
 import AccountBookDetailPage from "./pages/AccountBookDetailPage.jsx";
 import AccountBookListPage from "./pages/AccountBookListPage.jsx";
@@ -38,6 +39,11 @@ import {
   fetchTransactions,
   syncTransactions,
 } from "./services/transactionService.js";
+import {
+  fetchProfile,
+  updateProfileNickname,
+  upsertProfile,
+} from "./services/profileService.js";
 import LoginPage from "./pages/LoginPage.jsx";
 import bchar from "./assets/image/char/bchar.png";
 import bcharClicked from "./assets/image/char/bchar_c.png";
@@ -115,15 +121,48 @@ const getLoginIdFromUser = (user) => {
   );
 };
 
-const toCurrentUser = (user) => {
-  const loginId = getLoginIdFromUser(user);
+const toCurrentUser = (user, profile = null) => {
+  const loginId = profile?.login_id || getLoginIdFromUser(user);
 
   return {
     id: user.id,
     userId: loginId,
-    nickname: loginId,
+    nickname: profile?.nickname || loginId,
     email: user.email,
   };
+};
+
+const loadUserProfile = async (user) => {
+  if (!user) {
+    return { currentUser: null, profile: null };
+  }
+
+  const fallbackLoginId = getLoginIdFromUser(user);
+
+  try {
+    const existingProfile = await fetchProfile(user.id);
+
+    if (existingProfile) {
+      return {
+        currentUser: toCurrentUser(user, existingProfile),
+        profile: existingProfile,
+      };
+    }
+
+    const createdProfile = await upsertProfile({
+      user_id: user.id,
+      login_id: fallbackLoginId,
+      nickname: fallbackLoginId,
+    });
+
+    return {
+      currentUser: toCurrentUser(user, createdProfile),
+      profile: createdProfile,
+    };
+  } catch (error) {
+    console.error("Load profile error:", error);
+    return { currentUser: toCurrentUser(user), profile: null };
+  }
 };
 
 const CHARACTER_MOTIONS = {
@@ -159,10 +198,14 @@ const CHARACTER_MOTIONS = {
   },
 };
 
-function AppShell({ nickname, onLogout, children }) {
+function AppShell({ nickname, onLogout, onOpenProfile, children }) {
   return (
     <div className="app-shell">
-      <AppHeader nickname={nickname} onLogout={onLogout} />
+      <AppHeader
+        nickname={nickname}
+        onLogout={onLogout}
+        onOpenProfile={onOpenProfile}
+      />
       {children}
     </div>
   );
@@ -346,6 +389,8 @@ function App() {
   const [categoryTypes, setCategoryTypes] = useState(EMPTY_CATEGORY_TYPES);
   const [transactions, setTransactions] = useState({});
   const [currentUser, setCurrentUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const transactionSaveTimersRef = useRef({});
   const transactionSaveVersionsRef = useRef({});
@@ -381,14 +426,17 @@ function App() {
       if (error) {
         console.error("Supabase session error:", error);
         setCurrentUser(null);
+        setProfile(null);
         setIsAuthLoading(false);
         return;
       }
 
       const user = data.session?.user;
+      const nextUserProfile = await loadUserProfile(user);
 
       setAccountBooksLoading(Boolean(user));
-      setCurrentUser(user ? toCurrentUser(user) : null);
+      setCurrentUser(nextUserProfile.currentUser);
+      setProfile(nextUserProfile.profile);
       setIsAuthLoading(false);
     };
 
@@ -396,11 +444,13 @@ function App() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const user = session?.user;
+      const nextUserProfile = await loadUserProfile(user);
 
       setAccountBooksLoading(Boolean(user));
-      setCurrentUser(user ? toCurrentUser(user) : null);
+      setCurrentUser(nextUserProfile.currentUser);
+      setProfile(nextUserProfile.profile);
       setIsAuthLoading(false);
     });
 
@@ -513,14 +563,20 @@ function App() {
     loadTransactions();
   }, [currentUser, monthAccountBookId, selectedMonth]);
 
-  const handleLogin = (account) => {
+  const handleLogin = async (account) => {
     setAccountBooksLoading(true);
-    setCurrentUser({
+
+    const nextUserProfile = await loadUserProfile({
       id: account.id,
-      userId: account.userId,
-      nickname: account.nickname,
       email: account.email,
+      user_metadata: {
+        login_id: account.userId,
+        nickname: account.nickname,
+      },
     });
+
+    setCurrentUser(nextUserProfile.currentUser);
+    setProfile(nextUserProfile.profile);
 
     return startPath;
   };
@@ -532,6 +588,8 @@ function App() {
     localStorage.removeItem("userId");
     localStorage.removeItem("nickname");
     setCurrentUser(null);
+    setProfile(null);
+    setIsProfileModalOpen(false);
     navigate("/login", { replace: true });
   };
 
@@ -553,7 +611,7 @@ function App() {
       });
     } catch (error) {
       console.error("Create account book error:", error);
-      alert("가계부 생성 중 오류가 발생했습니다.");
+      alert("媛怨꾨? ?앹꽦 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
     }
   };
 
@@ -582,7 +640,7 @@ function App() {
       );
     } catch (error) {
       console.error("Update account book name error:", error);
-      alert("가계부 이름 수정 중 오류가 발생했습니다.");
+      alert("媛怨꾨? ?대쫫 ?섏젙 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
     }
   };
 
@@ -601,7 +659,7 @@ function App() {
       );
     } catch (error) {
       console.error("Delete account book error:", error);
-      alert("가계부 삭제 중 오류가 발생했습니다.");
+      alert("媛怨꾨? ??젣 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
     }
   };
 
@@ -645,7 +703,7 @@ function App() {
       );
     } catch (error) {
       console.error("Create account book month error:", error);
-      alert("월 추가 중 오류가 발생했습니다.");
+      alert("??異붽? 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
     }
   };
 
@@ -695,7 +753,7 @@ function App() {
       );
     } catch (error) {
       console.error("Update account book month error:", error);
-      alert("월 수정 중 오류가 발생했습니다.");
+      alert("???섏젙 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
     }
   };
 
@@ -741,7 +799,7 @@ function App() {
       );
     } catch (error) {
       console.error("Delete account book month error:", error);
-      alert("월 삭제 중 오류가 발생했습니다.");
+      alert("????젣 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
     }
   };
 
@@ -882,7 +940,7 @@ function App() {
       } catch (error) {
         console.error("Save transactions error:", error);
         pendingTransactionChangesRef.current[saveKey] = true;
-        alert("거래내역 저장 중 오류가 발생했습니다.");
+        alert("嫄곕옒?댁뿭 ???以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
       }
     }, TRANSACTION_SAVE_DELAY);
   };
@@ -902,7 +960,7 @@ function App() {
       setCategoryTypes(savedCategoryTypes);
     } catch (error) {
       console.error("Save account book categories error:", error);
-      alert("수입/지출 항목 저장 중 오류가 발생했습니다.");
+      alert("?섏엯/吏異???ぉ ???以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
       throw error;
     }
   };
@@ -922,7 +980,7 @@ function App() {
       return savedCategory;
     } catch (error) {
       console.error("Create account book category error:", error);
-      alert("수입/지출 항목 추가 중 오류가 발생했습니다.");
+      alert("?섏엯/吏異???ぉ 異붽? 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
       throw error;
     }
   };
@@ -949,7 +1007,7 @@ function App() {
       return savedCategory;
     } catch (error) {
       console.error("Update account book category error:", error);
-      alert("수입/지출 항목 수정 중 오류가 발생했습니다.");
+      alert("?섏엯/吏異???ぉ ?섏젙 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
       throw error;
     }
   };
@@ -990,8 +1048,44 @@ function App() {
       });
     } catch (error) {
       console.error("Delete account book category error:", error);
-      alert("수입/지출 항목 삭제 중 오류가 발생했습니다.");
+      alert("?섏엯/吏異???ぉ ??젣 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
       throw error;
+    }
+  };
+
+  const handleSaveProfile = async ({ nickname, newPassword }) => {
+    if (!currentUser) {
+      return;
+    }
+
+    const nextNickname = nickname.trim();
+
+    try {
+      if (newPassword) {
+        const { error: passwordError } = await supabase.auth.updateUser({
+          password: newPassword,
+        });
+
+        if (passwordError) {
+          throw passwordError;
+        }
+      }
+
+      const updatedProfile = await updateProfileNickname(
+        currentUser.id,
+        nextNickname,
+      );
+
+      setProfile(updatedProfile);
+      setCurrentUser((prevCurrentUser) =>
+        prevCurrentUser
+          ? { ...prevCurrentUser, nickname: updatedProfile.nickname }
+          : prevCurrentUser,
+      );
+      setIsProfileModalOpen(false);
+    } catch (error) {
+      console.error("Save profile error:", error);
+      alert("프로필 저장 중 오류가 발생했습니다.");
     }
   };
 
@@ -1001,7 +1095,11 @@ function App() {
     }
 
     return (
-      <AppShell nickname={currentUser.nickname} onLogout={handleLogout}>
+      <AppShell
+        nickname={currentUser.nickname}
+        onLogout={handleLogout}
+        onOpenProfile={() => setIsProfileModalOpen(true)}
+      >
         {children}
       </AppShell>
     );
@@ -1012,7 +1110,7 @@ function App() {
       return renderAuthedPage(
         <main className="list-page">
           <section className="list-section">
-            <p>가계부 목록을 불러오는 중...</p>
+            <p>媛怨꾨? 紐⑸줉??遺덈윭?ㅻ뒗 以?..</p>
           </section>
         </main>,
       );
@@ -1036,7 +1134,7 @@ function App() {
       return renderAuthedPage(
         <main className="month-page">
           <section className="month-workspace">
-            <p>월별 거래내역을 불러오는 중...</p>
+            <p>?붾퀎 嫄곕옒?댁뿭??遺덈윭?ㅻ뒗 以?..</p>
           </section>
         </main>,
       );
@@ -1059,7 +1157,7 @@ function App() {
         <PageCharacters />
         <main className="login-page">
           <section className="login-card">
-            <p>로그인 상태 확인 중...</p>
+            <p>濡쒓렇???곹깭 ?뺤씤 以?..</p>
           </section>
         </main>
       </>
@@ -1069,6 +1167,14 @@ function App() {
   return (
     <>
       <PageCharacters />
+      {isProfileModalOpen && currentUser && (
+        <ProfileModal
+          profile={profile}
+          currentUser={currentUser}
+          onClose={() => setIsProfileModalOpen(false)}
+          onSave={handleSaveProfile}
+        />
+      )}
       <Routes>
         <Route
           path="/"

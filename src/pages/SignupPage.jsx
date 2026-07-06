@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { upsertProfile } from '../services/profileService'
 
 const toAuthEmail = (userId) => `${userId}@y-account-book.com`
 
@@ -70,6 +71,18 @@ function SignupPage() {
       return
     }
 
+    try {
+      await upsertProfile({
+        user_id: data.user.id,
+        login_id: trimmedUserId,
+        nickname: trimmedUserId,
+      })
+    } catch (profileError) {
+      console.error('Supabase profile signup error:', profileError)
+      setErrorMessage('프로필 생성 중 오류가 발생했습니다.')
+      return
+    }
+
     alert('회원가입이 완료되었습니다. 로그인해 주세요.')
     navigate('/login', { replace: true })
   }
@@ -103,7 +116,7 @@ function SignupPage() {
               id="password"
               name="password"
               type="password"
-              placeholder="비밀번호를 입력하세요. (6자 이상)"
+              placeholder="비밀번호를 입력하세요 (6자 이상)"
               autoComplete="new-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
