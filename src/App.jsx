@@ -55,6 +55,7 @@ const hasAccountBooks = (accountBooks) => accountBooks.length > 0;
 
 const EMPTY_CATEGORY_TYPES = { expense: [], income: [] };
 const TRANSACTION_SAVE_DELAY = 800;
+const AUTH_CHECK_TIMEOUT = 5000;
 
 const getTransactionSaveKey = (accountBookId, month) =>
   `${accountBookId}:${month}`;
@@ -130,6 +131,20 @@ const toCurrentUser = (user, profile = null) => {
     nickname: profile?.nickname || loginId,
     email: user.email,
   };
+};
+
+const withTimeout = (promise, timeoutMs, errorMessage) => {
+  let timeoutId;
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      reject(new Error(errorMessage));
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    window.clearTimeout(timeoutId);
+  });
 };
 
 const loadUserProfile = async (user) => {
@@ -420,19 +435,14 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const loadSession = async () => {
-      const { data, error } = await supabase.auth.getSession();
+    let isActive = true;
 
-      if (error) {
-        console.error("Supabase session error:", error);
-        setCurrentUser(null);
-        setProfile(null);
-        setIsAuthLoading(false);
+    const applyAuthUser = async (user) => {
+      const nextUserProfile = await loadUserProfile(user);
+
+      if (!isActive) {
         return;
       }
-
-      const user = data.session?.user;
-      const nextUserProfile = await loadUserProfile(user);
 
       setAccountBooksLoading(Boolean(user));
       setCurrentUser(nextUserProfile.currentUser);
@@ -440,21 +450,51 @@ function App() {
       setIsAuthLoading(false);
     };
 
+    const clearAuthUser = () => {
+      if (!isActive) {
+        return;
+      }
+
+      setAccountBooksLoading(false);
+      setCurrentUser(null);
+      setProfile(null);
+      setIsAuthLoading(false);
+    };
+
+    const loadSession = async () => {
+      try {
+        const { data, error } = await withTimeout(
+          supabase.auth.getSession(),
+          AUTH_CHECK_TIMEOUT,
+          "Supabase session check timed out",
+        );
+
+        if (error) {
+          console.error("Supabase session error:", error);
+          clearAuthUser();
+          return;
+        }
+
+        await applyAuthUser(data.session?.user);
+      } catch (error) {
+        console.error("Supabase session check failed:", error);
+        clearAuthUser();
+      }
+    };
+
     loadSession();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const user = session?.user;
-      const nextUserProfile = await loadUserProfile(user);
-
-      setAccountBooksLoading(Boolean(user));
-      setCurrentUser(nextUserProfile.currentUser);
-      setProfile(nextUserProfile.profile);
-      setIsAuthLoading(false);
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      applyAuthUser(session?.user).catch((error) => {
+        console.error("Supabase auth state change failed:", error);
+        clearAuthUser();
+      });
     });
 
     return () => {
+      isActive = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -611,7 +651,7 @@ function App() {
       });
     } catch (error) {
       console.error("Create account book error:", error);
-      alert("媛怨꾨? ?앹꽦 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
+      alert("가계부 생성 중 오류가 발생했습니다.");
     }
   };
 
@@ -640,7 +680,7 @@ function App() {
       );
     } catch (error) {
       console.error("Update account book name error:", error);
-      alert("媛怨꾨? ?대쫫 ?섏젙 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
+      alert("가계부 이름 수정 중 오류가 발생했습니다.");
     }
   };
 
@@ -659,7 +699,7 @@ function App() {
       );
     } catch (error) {
       console.error("Delete account book error:", error);
-      alert("媛怨꾨? ??젣 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
+      alert("가계부 삭제 중 오류가 발생했습니다.");
     }
   };
 
@@ -703,7 +743,7 @@ function App() {
       );
     } catch (error) {
       console.error("Create account book month error:", error);
-      alert("??異붽? 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
+      alert("월 추가 중 오류가 발생했습니다.");
     }
   };
 
@@ -753,7 +793,7 @@ function App() {
       );
     } catch (error) {
       console.error("Update account book month error:", error);
-      alert("???섏젙 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
+      alert("월 수정 중 오류가 발생했습니다.");
     }
   };
 
@@ -799,7 +839,7 @@ function App() {
       );
     } catch (error) {
       console.error("Delete account book month error:", error);
-      alert("????젣 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
+      alert("월 삭제 중 오류가 발생했습니다.");
     }
   };
 
@@ -940,7 +980,7 @@ function App() {
       } catch (error) {
         console.error("Save transactions error:", error);
         pendingTransactionChangesRef.current[saveKey] = true;
-        alert("嫄곕옒?댁뿭 ???以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
+        alert("거래내역 저장 중 오류가 발생했습니다.");
       }
     }, TRANSACTION_SAVE_DELAY);
   };
@@ -960,7 +1000,7 @@ function App() {
       setCategoryTypes(savedCategoryTypes);
     } catch (error) {
       console.error("Save account book categories error:", error);
-      alert("?섏엯/吏異???ぉ ???以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
+      alert("수입/지출 항목 저장 중 오류가 발생했습니다.");
       throw error;
     }
   };
@@ -980,7 +1020,7 @@ function App() {
       return savedCategory;
     } catch (error) {
       console.error("Create account book category error:", error);
-      alert("?섏엯/吏異???ぉ 異붽? 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
+      alert("수입/지출 항목 추가 중 오류가 발생했습니다.");
       throw error;
     }
   };
@@ -1007,7 +1047,7 @@ function App() {
       return savedCategory;
     } catch (error) {
       console.error("Update account book category error:", error);
-      alert("?섏엯/吏異???ぉ ?섏젙 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
+      alert("수입/지출 항목 수정 중 오류가 발생했습니다.");
       throw error;
     }
   };
@@ -1048,7 +1088,7 @@ function App() {
       });
     } catch (error) {
       console.error("Delete account book category error:", error);
-      alert("?섏엯/吏異???ぉ ??젣 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
+      alert("수입/지출 항목 삭제 중 오류가 발생했습니다.");
       throw error;
     }
   };
@@ -1110,7 +1150,7 @@ function App() {
       return renderAuthedPage(
         <main className="list-page">
           <section className="list-section">
-            <p>媛怨꾨? 紐⑸줉??遺덈윭?ㅻ뒗 以?..</p>
+            <p>가계부 목록을 불러오는 중...</p>
           </section>
         </main>,
       );
@@ -1134,7 +1174,7 @@ function App() {
       return renderAuthedPage(
         <main className="month-page">
           <section className="month-workspace">
-            <p>?붾퀎 嫄곕옒?댁뿭??遺덈윭?ㅻ뒗 以?..</p>
+            <p>월별 거래내역을 불러오는 중...</p>
           </section>
         </main>,
       );
@@ -1157,7 +1197,14 @@ function App() {
         <PageCharacters />
         <main className="login-page">
           <section className="login-card">
-            <p>濡쒓렇???곹깭 ?뺤씤 以?..</p>
+            <p>로그인 상태 확인 중...</p>
+            <button
+              className="submit-button"
+              type="button"
+              onClick={() => navigate("/login", { replace: true })}
+            >
+              로그인 페이지로 이동
+            </button>
           </section>
         </main>
       </>

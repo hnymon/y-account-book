@@ -116,7 +116,7 @@ function SignupPage() {
               id="password"
               name="password"
               type="password"
-              placeholder="비밀번호를 입력하세요 (6자 이상)"
+              placeholder="비밀번호를 입력하세요(6자 이상)"
               autoComplete="new-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
