@@ -443,7 +443,7 @@ function CategoryManageModal({
         aria-modal="true"
       >
         <div className="category-modal-header">
-          <h1 id="category-modal-title">수입/지출 관리</h1>
+          <h1 id="category-modal-title">지출/수입 관리</h1>
           <div className="category-modal-actions">
             <button type="button" onClick={handleSave}>
               저장
@@ -566,7 +566,7 @@ function AccountBookDetailPage({
               type="button"
               onClick={() => setIsCategoryModalOpen(true)}
             >
-              수입/지출 관리
+              지출/수입 관리
             </button>
             <Link className="secondary-button" to="/account-books">
               목록으로
@@ -642,12 +642,12 @@ function AccountBookDetailPage({
                   )}
                 </div>
                 <div className="record-money">
-                  <span>수입</span>
-                  <strong>{formatCurrency(monthRecord.income)}</strong>
-                </div>
-                <div className="record-money">
                   <span>지출</span>
                   <strong>{formatCurrency(monthRecord.expense)}</strong>
+                </div>
+                <div className="record-money">
+                  <span>수입</span>
+                  <strong>{formatCurrency(monthRecord.income)}</strong>
                 </div>
                 <div className="record-actions">
                   {isEditing ? (
