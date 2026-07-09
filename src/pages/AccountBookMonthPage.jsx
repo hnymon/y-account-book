@@ -203,7 +203,8 @@ function TransactionTable({
   ]
 
   const handleChange = (index, field, value) => {
-    const nextTransactions = [...transactions]
+    const currentTransactions = latestTransactionsRef.current
+    const nextTransactions = [...currentTransactions]
     const current =
       nextTransactions[index] || createEmptyTransaction(type, month, index)
 
@@ -214,9 +215,13 @@ function TransactionTable({
 
     nextTransactions[index] = nextTransaction
     const normalizedTransactions = normalizeTransactions(nextTransactions)
+    const removedEmptyTransaction =
+      nextTransactions.length > normalizedTransactions.length
 
     latestTransactionsRef.current = normalizedTransactions
-    onChange(type, normalizedTransactions, { deferSave: true })
+    onChange(type, normalizedTransactions, {
+      deferSave: !removedEmptyTransaction,
+    })
   }
 
   const handleCommit = () => {
