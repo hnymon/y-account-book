@@ -154,15 +154,18 @@ function ExpenseSummaryTable({ categories, title, transactions }) {
         <h2 id={`${title}-summary`}>{title}</h2>
         <strong>{formatCurrency(total)}</strong>
       </div>
-      <div className="summary-list">
+      <div className="summary-list summary-list-grouped">
         {groups.map((group) => (
-          <div key={group.group}>
-            <div className="summary-row">
+          <div className="summary-group" key={group.group}>
+            <div className="summary-row summary-row-total">
               <span>{group.label}</span>
               <strong>{formatCurrency(group.total)}</strong>
             </div>
             {group.rows.map((row) => (
-              <div className="summary-row" key={`${group.group}-${row.category}`}>
+              <div
+                className="summary-row summary-row-detail"
+                key={`${group.group}-${row.category}`}
+              >
                 <span>{row.category}</span>
                 <strong>{formatCurrency(row.total)}</strong>
               </div>

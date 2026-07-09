@@ -1083,6 +1083,14 @@
   background: rgba(255, 250, 253, 0.5);
 }
 
+.summary-list-grouped {
+  border-top: 0;
+}
+
+.summary-group + .summary-group {
+  margin-top: 8px;
+}
+
 .summary-row {
   min-height: 34px;
   display: grid;
@@ -1103,6 +1111,45 @@
   color: #5d4050;
   font-weight: 900;
   white-space: nowrap;
+}
+
+.summary-row-total {
+  min-height: 42px;
+  border: 1px solid #e4bdcd;
+  border-left: 4px solid #d986ad;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #523444;
+  background: #fff6fa;
+  box-shadow: 0 8px 18px rgba(217, 134, 173, 0.12);
+  font-size: 15px;
+}
+
+.summary-row-total span,
+.summary-row-total strong {
+  font-weight: 900;
+}
+
+.summary-row-total strong {
+  color: #b95f88;
+}
+
+.summary-row-detail {
+  min-height: 33px;
+  margin-left: 12px;
+  padding-left: 12px;
+  border-bottom-color: #efdde5;
+  color: #735665;
+  font-size: 13px;
+}
+
+.summary-row-detail span {
+  font-weight: 700;
+}
+
+.summary-row-detail strong {
+  color: #6a4b5a;
+  font-weight: 800;
 }
 
 .transaction-table {
